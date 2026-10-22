@@ -35,4 +35,4 @@ jobs:
 
       - name: Build
         working-directory: microservices/${{ matrix.service }}
-        run: mvn -B package -DskipTests
+        run: mvn -B package -Dmaven.test.skip=true
