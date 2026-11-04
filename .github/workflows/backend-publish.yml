@@ -1,0 +1,79 @@
+name: Backend Publish (Docker Hub)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'microservices/**'
+      - '.github/workflows/backend-publish.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # Purane commits me Arpit@1234 mil sakta hai, isliye abhi fail nahi karwa rahe.
+      # Password rotate karne ke baad continue-on-error hata dena.
+      - uses: gitleaks/gitleaks-action@v2
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish:
+    needs: secret-scan
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { dir: eureka-server,    image: salon-eureka-server-yt }
+          - { dir: gateway-server,   image: salon-gatewayserver-yt }
+          - { dir: user-service,     image: salon-user-yt }
+          - { dir: salon-service,    image: salon-yt }
+          - { dir: category-service, image: salon-category-yt }
+          - { dir: service-offering, image: salon-service-offering-yt }
+          - { dir: booking-service,  image: salon-booking-yt }
+          - { dir: payment-service,  image: salon-payment-yt }
+          - { dir: review,           image: salon-review-yt }
+          - { dir: notifications,    image: salon-notifications-yt }
+    env:
+      IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/${{ matrix.image }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: maven
+
+      # Jib ka plugin pom me ho ya na ho, full coordinates se chalega.
+      # Image ka naam pom wale naam ko override karta hai.
+      - name: Build and push image with Jib
+        working-directory: microservices/${{ matrix.dir }}
+        run: |
+          mvn -B -Dmaven.test.skip=true compile \
+            com.google.cloud.tools:jib-maven-plugin:3.5.2:build \
+            -Djib.to.image=${IMAGE}:${GITHUB_SHA::7} \
+            -Djib.to.tags=latest,v1 \
+            -Djib.to.auth.username=${{ secrets.DOCKERHUB_USERNAME }} \
+            -Djib.to.auth.password=${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@0.28.0
+        continue-on-error: true
+        env:
+          TRIVY_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          TRIVY_PASSWORD: ${{ secrets.DOCKERHUB_TOKEN }}
+        with:
+          image-ref: ${{ env.IMAGE }}:latest
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: '0'   # report only. Strict banana ho to '1' kar do.
+
