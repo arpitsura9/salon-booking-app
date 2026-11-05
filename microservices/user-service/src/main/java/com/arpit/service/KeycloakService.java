@@ -17,8 +17,8 @@ import java.util.List;
 @RequiredArgsConstructor
 public class KeycloakService {
 
-    private static final String KEYCLOAK_BASE_URL = "http://localhost:8080";
-    private static final String KEYCLOAK_ADMIN_API = KEYCLOAK_BASE_URL + "/admin/realms/master/users";
+    private static final String KEYCLOAK_BASE_URL =
+            System.getenv().getOrDefault("KEYCLOAK_BASE_URL", "http://localhost:8080");    private static final String KEYCLOAK_ADMIN_API = KEYCLOAK_BASE_URL + "/admin/realms/master/users";
 
     private static final String TOKEN_URL = KEYCLOAK_BASE_URL + "/realms/master/protocol/openid-connect/token";
 

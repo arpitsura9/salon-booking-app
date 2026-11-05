@@ -3,6 +3,7 @@ import { useDispatch } from 'react-redux';
 import SockJS from 'sockjs-client';
 import Stomp from "stompjs";
 import { addNotification } from '../Redux/Notifications/action';
+import { API_BASE_URL } from "../config/api";
 
 const useNotificationWebsocket = (userId,type) => {
     const dispatch = useDispatch();
@@ -10,9 +11,8 @@ const useNotificationWebsocket = (userId,type) => {
 
   useEffect(()=>{
     if(userId){
-      const sock = new SockJS("http://localhost:5000/api/notifications/ws")
-      const stomp = Stomp.over("sock")
-      setStompClient(stomp)
+        const sock = new SockJS(`${API_BASE_URL}/api/notifications/ws`)      const stomp = Stomp.over("sock")
+        setStompClient(stomp)
     }
   },[userId])
 

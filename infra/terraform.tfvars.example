@@ -1,0 +1,5 @@
+# Is file ko copy karke "terraform.tfvars" naam do aur values bharo.
+# terraform.tfvars ko kabhi git me commit mat karna.
+my_ip_cidr              = "1.2.3.4/32"
+db_password             = "ChangeMe-123"
+keycloak_admin_password = "ChangeMe-456"

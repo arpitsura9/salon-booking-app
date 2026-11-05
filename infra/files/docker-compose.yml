@@ -1,0 +1,186 @@
+# EC2 pe chalne wali compose. Images Docker Hub se aati hain (CI pipeline ne push ki).
+# Ek hi MySQL me 8 databases (init.sql se bante hain).
+
+x-java-service: &java-service
+  restart: on-failure
+  networks: [salon]
+  depends_on:
+    mysql:
+      condition: service_healthy
+    eurekaserver:
+      condition: service_started
+    rabbitmq:
+      condition: service_started
+  mem_limit: 450m
+
+x-common-env: &common-env
+  JAVA_TOOL_OPTIONS: "-Xms96m -Xmx256m"
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8070/eureka/
+  SPRING_DATASOURCE_USERNAME: root
+  SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+  SPRING_RABBITMQ_HOST: rabbitmq
+  SPRING_RABBITMQ_USERNAME: salon
+  SPRING_RABBITMQ_PASSWORD: ${DB_PASSWORD}
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    mem_limit: 900m
+    networks: [salon]
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: salon
+      RABBITMQ_DEFAULT_PASS: ${DB_PASSWORD}
+    ports:
+      - "15672:15672"
+    mem_limit: 600m
+    networks: [salon]
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    container_name: keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      JAVA_OPTS_KC_HEAP: "-Xms256m -Xmx768m"
+    ports:
+      - "8080:8080"
+    mem_limit: 1200m
+    networks: [salon]
+
+  eurekaserver:
+    image: arpit70001/salon-eureka-server-yt:latest
+    container_name: eurekaserver
+    restart: on-failure
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms96m -Xmx256m"
+    ports:
+      - "8070:8070"
+    mem_limit: 450m
+    networks: [salon]
+
+  user:
+    <<: *java-service
+    image: arpit70001/salon-user-yt:latest
+    container_name: user
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: user-service
+      KEYCLOAK_BASE_URL: http://keycloak:8080
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/userdb
+
+  salon:
+    <<: *java-service
+    image: arpit70001/salon-yt:latest
+    container_name: salon
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: salon-service
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/salondb
+
+  category:
+    <<: *java-service
+    image: arpit70001/salon-category-yt:latest
+    container_name: category
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: category-service
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/categorydb
+
+  service-offering:
+    <<: *java-service
+    image: arpit70001/salon-service-offering-yt:latest
+    container_name: service-offering
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: service-offering
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/serviceofferingdb
+
+  booking:
+    <<: *java-service
+    image: arpit70001/salon-booking-yt:latest
+    container_name: booking
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: booking-service
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/bookingdb
+
+  payment:
+    <<: *java-service
+    image: arpit70001/salon-payment-yt:latest
+    container_name: payment
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: payment-service
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/paymentdb
+
+  review:
+    <<: *java-service
+    image: arpit70001/salon-review-yt:latest
+    container_name: review
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: review
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/reviewdb
+
+  notification:
+    <<: *java-service
+    image: arpit70001/salon-notifications-yt:latest
+    container_name: notification
+    environment:
+      <<: *common-env
+      SPRING_APPLICATION_NAME: notification-service
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/notificationdb
+
+  gatewayserver:
+    image: arpit70001/salon-gatewayserver-yt:latest
+    container_name: gatewayserver
+    restart: on-failure
+    depends_on:
+      - eurekaserver
+    environment:
+      JAVA_TOOL_OPTIONS: "-Xms96m -Xmx256m"
+      SPRING_APPLICATION_NAME: gateway-server
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eurekaserver:8070/eureka/
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI: http://keycloak:8080/realms/master/protocol/openid-connect/certs
+    ports:
+      - "5000:5000"
+    mem_limit: 450m
+    networks: [salon]
+
+  frontend:
+    image: arpit70001/salon-frontend-yt:latest
+    container_name: frontend
+    restart: on-failure
+    depends_on:
+      - gatewayserver
+    ports:
+      - "80:80"
+    mem_limit: 128m
+    networks: [salon]
+
+networks:
+  salon:
+    driver: bridge
+
+volumes:
+  mysql-data:
