@@ -11,7 +11,8 @@ const useNotificationWebsocket = (userId,type) => {
 
   useEffect(()=>{
     if(userId){
-        const sock = new SockJS(`${API_BASE_URL}/api/notifications/ws`)      const stomp = Stomp.over("sock")
+        const sock = new SockJS(`${API_BASE_URL}/api/notifications/ws`);
+        const stomp = Stomp.over("sock")
         setStompClient(stomp)
     }
   },[userId])
